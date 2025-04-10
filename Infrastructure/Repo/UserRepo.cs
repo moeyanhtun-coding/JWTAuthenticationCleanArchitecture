@@ -1,18 +1,17 @@
 ﻿using Application.Contract;
 using Application.Models.Login;
 using Application.Models.Register;
+using Domain.Entities;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Infrastructure.Repo
 {
-    internal class UserRepo : IUser
+    public class UserRepo : IUser
     {
         private readonly AppDbContext _context;
 
@@ -23,14 +22,53 @@ namespace Infrastructure.Repo
 
         public async Task<LoginResponseModel> LoginUserAsync(LoginUserModel loginUser)
         {
-            var getUser = await _context.Users.FirstOrDefaultAsync(x => x.Email == loginUser.Email);
+            var getUser = await FindUserByEmail(loginUser.Email!);
             if (getUser is null) return new LoginResponseModel(false, "User Not Found, Sorry!");
             var checkPassword = BCrypt.Net.BCrypt.Verify(loginUser.Password, getUser.Password);
+            if (checkPassword)
+                return new LoginResponseModel(true, "Login Successfully", GenerateJWTToken(getUser));
+            else 
+                return new LoginResponseModel(false, "Credentials are not valid");
+        }
 
-;        }
-        public Task<RegisterResponseModel> RegisterUserAsync(RegisterUserModel registerUser)
+
+        public async Task<RegisterResponseModel> RegisterUserAsync(RegisterUserModel registerUser)
         {
-            throw new NotImplementedException();
+            var getUser = await FindUserByEmail(registerUser.Email!);
+            if (getUser is not null) return new RegisterResponseModel(false, "User Already Exist");
+            var newUser = new ApplicationUser
+            {
+                Name = registerUser.Name,
+                Email = registerUser.Email,
+                Password = BCrypt.Net.BCrypt.HashPassword(registerUser.Password)
+            };
+            await _context.Users.AddAsync(newUser);
+            await _context.SaveChangesAsync();
+            return new RegisterResponseModel(true, "User Created Successfully");
+        }
+
+        private async Task<ApplicationUser> FindUserByEmail(string email)
+            => await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
+
+
+        private static string GenerateJWTToken(ApplicationUser user)
+        {
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("JWT:Key"));
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+            var claims = new[]
+            {
+                new Claim("Id", user.Id.ToString()),
+                new Claim("Name", user.Name!),
+                new Claim("Email", user.Email!)
+            };
+            var token = new JwtSecurityToken(
+                issuer: "JWT:Issuer",
+                audience: "JWT:Audience",
+                claims: claims,
+                expires: DateTime.Now.AddMinutes(30),
+                signingCredentials: credentials
+            );
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }
