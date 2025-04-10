@@ -4,6 +4,7 @@ using Application.Models.Register;
 using Domain.Entities;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -14,10 +15,11 @@ namespace Infrastructure.Repo
     public class UserRepo : IUser
     {
         private readonly AppDbContext _context;
-
-        public UserRepo(AppDbContext context)
+        private readonly IConfiguration _configuration;
+        public UserRepo(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
         public async Task<LoginResponseModel> LoginUserAsync(LoginUserModel loginUser)
@@ -50,24 +52,27 @@ namespace Infrastructure.Repo
         private async Task<ApplicationUser> FindUserByEmail(string email)
             => await _context.Users.FirstOrDefaultAsync(x => x.Email == email);
 
-
-        private static string GenerateJWTToken(ApplicationUser user)
+        private string GenerateJWTToken(ApplicationUser user)
         {
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("JWT:Key"));
+            var key = _configuration["Jwt:Key"]; // get from appsettings
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
             var claims = new[]
             {
-                new Claim("Id", user.Id.ToString()),
-                new Claim("Name", user.Name!),
-                new Claim("Email", user.Email!)
-            };
+        new Claim("Id", user.Id.ToString()),
+        new Claim("Name", user.Name!),
+        new Claim("Email", user.Email!)
+    };
+
             var token = new JwtSecurityToken(
-                issuer: "JWT:Issuer",
-                audience: "JWT:Audience",
+                issuer: _configuration["Jwt:Issuer"],
+                audience: _configuration["Jwt:Audience"],
                 claims: claims,
                 expires: DateTime.Now.AddMinutes(30),
                 signingCredentials: credentials
             );
+
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
