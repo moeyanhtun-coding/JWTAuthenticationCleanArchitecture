@@ -17,7 +17,7 @@ namespace WebAPI.Controllers
             _user = user;
         }
 
-        [HttpPost("Login")]
+        [HttpPost("login")]
         public async Task<ActionResult<LoginResponseModel>> UserLogin(LoginUserModel loginUser)
         {
            var result = await _user.LoginUserAsync(loginUser);
@@ -27,7 +27,7 @@ namespace WebAPI.Controllers
                 return BadRequest(result);
         }
 
-        [HttpPost("Register")]
+        [HttpPost("register")]
         public async Task<ActionResult<RegisterResponseModel>> UserRegister(RegisterUserModel registerUser)
         {
             var result = await _user.RegisterUserAsync(registerUser);
